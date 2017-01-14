@@ -5,3 +5,5 @@
     1. Fix bugs with parameters
     2. Handle names with special config files
     3. clean the code
+    4. Get term size on windows
+    5. Print with colors on windows
