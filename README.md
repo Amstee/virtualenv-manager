@@ -26,7 +26,7 @@
     -> python install.py init
     
     You must have the key, content "Configuration" in your installation file
-    You can define rules that can be call at the execution of the program
+    You can define rules that you can call at the execution of the program as a command
     For example : {
                     ...
                     "test": {
