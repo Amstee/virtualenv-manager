@@ -55,8 +55,9 @@ class Utils:
 
 
 class Installer(Utils):
+    # path = os.getcwd()
     path = os.path.realpath(__file__)
-    path_dir = os.path.dirname(os.path.realpath(__file__)) + os.sep
+    path_dir = os.getcwd()
     python_path = sys.executable
     python_version = sys.version_info
     system = platform.system()
@@ -90,10 +91,14 @@ class Installer(Utils):
         config = self.config.getConfig()
         if self.system == 'Windows':
             self.bin_dir = "Scripts"
+            self.bin_name = "python.exe"
+            self.pip_name = "pip.exe"
         else:
             self.bin_dir = "bin"
-        self.venv_pip = config["path"] + os.sep + config["env"] + os.sep + self.bin_dir + os.sep + "pip.exe"
-        self.venv_bin = config["path"] + os.sep + config["env"] + os.sep + self.bin_dir + os.sep + "python.exe"
+            self.bin_name = "python"
+            self.pip_name = "pip"
+        self.venv_pip = config["path"] + os.sep + config["env"] + os.sep + self.bin_dir + os.sep + self.pip_name
+        self.venv_bin = config["path"] + os.sep + config["env"] + os.sep + self.bin_dir + os.sep + self.bin_name
 
     '''
         Functions parameters
@@ -110,41 +115,6 @@ class Installer(Utils):
         self.executed[self.current_command] = []
         return 0
 
-    # def install(self):
-    #     if (self.execProcess("pip install --upgrade pip")):
-    #         return 1
-    #     if (self.execProcess("pip install virtualenv --upgrade")):
-    #         return 1
-    #     self.changeDirectory("..")
-    #     if (not os.path.isdir("venv")):
-    #         self.execProcess("virtualenv venv" + " -p " + self.python_path)
-    #     else:
-    #         self.printFullTerm(Colors.WARNING, "Virtual environment already exist")
-    #     self.changeDirectory(self.path_dir)
-    #     ret = self.installDatabase()
-    #     if (ret):
-    #         return ret
-    #     return self.update()
-    #
-    # def update(self):
-    #     if (self.execProcessFromVenv(self.venv_pip + " install --upgrade pip") or
-    #         self.execProcessFromVenv(self.venv_pip + " install --upgrade wheel") or
-    #         self.execProcessFromVenv(self.venv_pip + " install -r " + self.requirements)):
-    #         return 1
-    #     return self.updateDatabase()
-    #
-    # def installDatabase(self):
-    #     return 0
-    #
-    # def updateDatabase(self):
-    #     context = os.getcwd()
-    #     self.changeDirectory("../src/")
-    #     if (self.execProcessFromVenv(self.venv_bin + self.manage + " makemigrations") or
-    #         self.execProcessFromVenv(self.venv_bin + self.manage + " migrate") or
-    #         self.execProcessFromVenv(self.venv_bin + self.manage + " loaddata misc/fixtures/initial_content.json")):
-    #         return 1
-    #     self.changeDirectory(context)
-    #     return 0
 
     '''
         UTILS FUNCTIONS
@@ -264,40 +234,42 @@ class Installer(Utils):
         return count
 
     def execCommand(self, command):
-        for cmd in self.commandMatcher[command]:
-            if "normal" == cmd:
-                for c in self.commandMatcher[command]["normal"]:
-                    if self.execProcess(c):
+        if "normal" in self.commandMatcher[command]:
+            for c in self.commandMatcher[command]["normal"]:
+                if self.execProcess(c):
+                    return 1
+        if "env_pip" in self.commandMatcher[command]:
+            for c in self.commandMatcher[command]["env_pip"]:
+                if c != "" and c:
+                    if self.execProcessFromVenv(self.venv_pip + " " + c):
                         return 1
-            elif "env_pip" == cmd:
-                for c in self.commandMatcher[command]["env_pip"]:
-                    if c != "" and c:
-                        if self.execProcessFromVenv(self.venv_pip + " " + c):
-                            return 1
-            elif "env_bin" == cmd:
-                for c in self.commandMatcher[command]["env_bin"]:
-                    if c != "" and c:
-                        if self.execProcessFromVenv(self.venv_bin + " " + c):
-                            return 1
-            elif "special" == cmd:
-                for c in self.commandMatcher[command]["special"]:
-                    if c == "requirements":
+        if "env_bin" in self.commandMatcher[command]:
+            for c in self.commandMatcher[command]["env_bin"]:
+                if c != "" and c:
+                    if self.execProcessFromVenv(self.venv_bin + " " + c):
+                        return 1
+        if "special" in self.commandMatcher[command]:
+            for c in self.commandMatcher[command]["special"]:
+                if c == "requirements":
+                    if (os.path.isfile(self.requirements)):
                         if self.execProcessFromVenv(self.venv_pip + " install -r " + self.requirements):
                             return 1
-                    elif c == "create":
-                        if (not os.path.isdir(self.venv)):
-                            if self.execProcess("virtualenv " + self.venv + " -p " + self.python_path):
-                                return 1
-                        else:
-                            self.printFullTerm(Colors.WARNING, "Virtual environment already exist")
-            elif "link":
-                for link in self.commandMatcher[command]["link"]:
-                    if (link in self.commandMatcher and link != self.current_command):
-                        temp = self.current_command
-                        self.current_command = link
-                        if self.execCommand(link):
+                    else:
+                        self.printFullTerm(Colors.FAIL, "Requirements file " + self.requirements + " not found.")
+                elif c == "create":
+                    if (not os.path.isdir(self.venv)):
+                        if self.execProcess("virtualenv " + self.venv + " -p " + self.python_path):
                             return 1
-                        self.current_command = temp
+                    else:
+                        self.printFullTerm(Colors.WARNING, "Virtual environment already exist")
+        if "link" in self.commandMatcher[command]:
+            for link in self.commandMatcher[command]["link"]:
+                if (link in self.commandMatcher and link != self.current_command):
+                    temp = self.current_command
+                    self.current_command = link
+                    if self.execCommand(link):
+                        return 1
+                    self.current_command = temp
         return 0
 
     def exec(self):
@@ -328,9 +300,8 @@ class Config:
     __parser = argparse.ArgumentParser("Installer parser")
     __config_file = "install.json"
     __content = {
-        "config_file": "install.json",
         "requirements": "REQUIREMENTS.txt",
-        "path": "..",
+        "path": "",
         "name": "default",
         "env": "venv"
     }
@@ -365,6 +336,28 @@ class Config:
         self.__parser.add_argument("--req", help="Your requirements file")
         self.usage = self.__parser.format_usage()
 
+    def loadConfig(self):
+        if not os.path.isfile(self.__config_file):
+                return 0
+        try:
+            with open(self.__config_file) as data_file:
+                data = json.load(data_file)
+                for key, content in data.items():
+                    if key == "Configuration":
+                        for k, v in content.items():
+                            self.__content[k] = v
+                    else:
+                        self.__commands[key] = {}
+                        for k, v in content.items():
+                            self.__commands[key][k] = v
+                if (DEBUG):
+                    print(json.dumps(self.__content, sort_keys=True, indent=4))
+                    print(json.dumps(self.__commands, sort_keys=True, indent=4))
+                return 0
+        except Exception as e:
+            print(e, file=sys.stderr)
+            return 1
+
     def createConfigFile(self):
         configuration = {}
         configuration["Configuration"] = self.__content
@@ -376,16 +369,17 @@ class Config:
         try:
             res = self.__parser.parse_args(), self.__parser.format_usage()
             return (res)
-        except SystemExit:
+        except SystemExit as e:
+            print(e, file=sys.stderr)
             sys.exit(1)
 
     def parseConf(self):
         res, usage = self.parse()
         try:
             if (res.conf):
-                self.__content["config_file"] = res.config
-                if self.loadConfig():
-                    return 1
+                self.__config_file = res.conf
+            if self.loadConfig():
+                return 1
             if (res.path):
                 self.__content["path"] = res.path
             if (res.req):
@@ -395,8 +389,11 @@ class Config:
             if (res.env):
                 self.__content["env"] = res.env
             self.__command_list.append(res.command)
+            if self.__content["path"] == "":
+                self.__content["path"] = "."
             return 0
-        except:
+        except Exception as e:
+            print(e, file=sys.stderr)
             return 1
 
     def getReq(self):
@@ -408,29 +405,11 @@ class Config:
     def getEnv(self):
         return self.__content["env"]
 
-    def loadConfig(self):
-        try:
-            with open(self.__content["config_file"]) as data_file:
-                data = json.load(data_file)
-                for key, content in data:
-                    if key == "Configuration":
-                        for k, v in content:
-                            self.__content[k] = v
-                    else:
-                        self.__commands[key] = {}
-                        with self.__commands[key] as command:
-                            for k, v in content:
-                                command[k].append(v)
-                return 0
-        except Exception as e:
-            print(e, file=sys.stderr)
-            return 1
-
     def getCommandList(self):
         return self.__command_list
 
     def getConfigFile(self):
-        return self.__content["config_file"]
+        return self.__config_file
 
     def getCommands(self):
         return self.__commands
@@ -444,18 +423,16 @@ class Config:
             return 0
         return 1
 
-    def feed(self, param):
-        self.__parameters.append(param)
-        return 0
-
     def setConfigFile(self, conf_file):
         if os.path.isfile(conf_file):
-            self.__content["config_file"] = conf_file
+            self.__config_file = conf_file
             return 0
         return 1
 
     def setPath(self, path):
         if (os.path.isdir(path)):
+            if (path == ""):
+                path = "."
             self.__content["path"] = path
             return 0
         return 1
