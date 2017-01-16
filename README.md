@@ -21,7 +21,7 @@
 
 ## 2. Configuration
 
-    The install.json configuration let you define your own configuration
+    The configuration file let you define your own configuration
     you can see the syntax by creating a default configuration file with the init command
     -> python install.py init
     
