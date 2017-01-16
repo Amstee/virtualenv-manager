@@ -32,15 +32,9 @@
                     "test": {
                         "env_bin": [test.py],
                         "env_pip": [install --upgrade pip],
-                        "link": [
-                            "test2"
-                        ],
-                        "normal": [
-                            "mv venv v",
-                        ],
-                        "private": [
-                            "test"
-                        ]
+                        "link": ["test2"],
+                        "normal": ["mv venv v"],
+                        "private": ["test"]
                     },
                     ...
                   }
