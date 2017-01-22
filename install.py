@@ -70,6 +70,7 @@ class AInstaller(Utils):
 
     commands = []
     commandMatcher = {}
+    wait = False
     bin_dir = ""
     venv_pip = ""
     venv_bin = ""
@@ -80,6 +81,7 @@ class AInstaller(Utils):
     current_command = "default"
     private = {}
     commands_list = []
+    subproc = []
     to_print = []
     executed = {}
     errors = {}
@@ -92,6 +94,7 @@ class AInstaller(Utils):
             "create": self.create,
         }
         self.config = config
+        self.wait = config.getWait()
         self.commands = self.config.getCommandList()
         self.venv = self.config.getPath() + os.sep + self.config.getEnv()
         self.requirements = self.config.getReq()
@@ -116,7 +119,7 @@ class AInstaller(Utils):
     '''
     def requirement(self):
         if (os.path.isfile(self.requirements)):
-            if self.execProcessFromVenv(self.venv_pip + " install -r " + self.requirements):
+            if self.execProcessFromVenv(self.venv_pip, " install -r " + self.requirements):
                 return 1
         else:
             self.printFullTerm(Colors.FAIL, "Requirements file " + self.requirements + " not found.")
@@ -170,8 +173,8 @@ class AInstaller(Utils):
             self.addError(self.current_command, command)
         return process.returncode
 
-    def execProcessFromVenv(self, command):
-        args = command.split()
+    def execProcessFromVenv(self, path, command):
+        args = [path] + command.split()
         self.printFullTerm(Colors.BLUE, "Executing command from venv [" + str(' '.join(args[1:])) + "]")
         process = subprocess.Popen(args)
         process.wait()
@@ -182,6 +185,23 @@ class AInstaller(Utils):
             self.printFullTerm(Colors.WARNING, "Process execution failed")
             self.addError(self.current_command, str(' '.join(args[1:])))
         return process.returncode
+
+    def execProcessAsync(self, command):
+        self.printFullTerm(Colors.BLUE, "Executing command [" + command + "]")
+        p = subprocess.Popen(command, shell=True)
+        self.subproc.append((p, command))
+        self.printFullTerm(Colors.GREEN, "Process launched successfully")
+        self.addExecuted(self.current_command, command)
+        return p
+
+    def execProcessFromVenvAsync(self, path, command: str):
+        args = [path] + command.split()
+        self.printFullTerm(Colors.BLUE, "Executing command from venv [" + str(' '.join(args[1:])) + "]")
+        p = subprocess.Popen(args)
+        self.subproc.append((p, ' '.join(args[1:])))
+        self.printFullTerm(Colors.GREEN, "Process launched successfully")
+        self.addExecuted(self.current_command, str(' '.join(args[1:])))
+        return p
 
     def askYesNoQuestion(self,  message, question_tag, default=True):
         print(os.linesep * 2)
@@ -236,9 +256,17 @@ class AInstaller(Utils):
             self.errors[src] = [str(message)]
         return 0
 
+    def waitProcesses(self):
+        if (self.wait):
+            for p in self.subproc:
+                proc, name = p
+                proc.wait()
+        return 0
+
     def end(self):
         count = 0
 
+        self.waitProcesses()
         self.printFullTerm(Colors.WARNING, "Summary")
         self.printColor(Colors.GREEN, "Success : ")
         for command, valid in self.executed.items():
@@ -273,12 +301,12 @@ class AInstaller(Utils):
         if "env_pip" in matcher[command]:
             for c in matcher[command]["env_pip"]:
                 if c != "" and c:
-                    if self.execProcessFromVenv(self.venv_pip + " " + c):
+                    if self.execProcessFromVenv(self.venv_pip, c):
                         return 1
         if "env_bin" in matcher[command]:
             for c in matcher[command]["env_bin"]:
                 if c != "" and c:
-                    if self.execProcessFromVenv(self.venv_bin + " " + c):
+                    if self.execProcessFromVenv(self.venv_bin, c):
                         return 1
         if "private" in matcher[command]:
             for c in matcher[command]["private"]:
@@ -322,6 +350,7 @@ class AInstaller(Utils):
 class Config:
     __parser = argparse.ArgumentParser("Installer parser")
     __config_file = "install.json"
+    __wait = False
     __content = {
         "requirements": "REQUIREMENTS.txt",
         "path": "",
@@ -354,6 +383,7 @@ class Config:
         self.__parser.add_argument("--conf", help="Specify the configuration file (.json)")
         self.__parser.add_argument("--path", help="Path where the virtual env will be created")
         self.__parser.add_argument("--name", help="Your configuration name")
+        self.__parser.add_argument("--nowait", action='store_true', help="Don't wait the end of a program")
         self.__parser.add_argument("--env", help="Your environment directory name")
         self.__parser.add_argument("--req", help="Your requirements file")
         self.usage = self.__parser.format_usage()
@@ -408,6 +438,8 @@ class Config:
                 self.__content["requirements"] = res.req
             if (res.name):
                 self.__content["name"] = res.name
+            if (res.nowait):
+                self.__wait = False
             if (res.env):
                 self.__content["env"] = res.env
             self.__command_list.append(res.command)
@@ -417,6 +449,13 @@ class Config:
         except Exception as e:
             print(e, file=sys.stderr)
             return 1
+
+    def getWait(self):
+        return self.__wait
+
+    def setWait(self, value):
+        self.__wait = value
+        return 0
 
     def getReq(self):
         return self.__content["requirements"]
